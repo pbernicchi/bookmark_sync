@@ -167,6 +167,12 @@ def save_master(master: dict) -> None:
 
 def merge_into_master(master: dict, new_bookmarks: list[dict]) -> int:
     """Add new_bookmarks into master, deduplicating by normalized URL. Returns count added."""
+    # TODO: deletion propagation — master is currently append-only; browser-side deletes are
+    # invisible to pull. A snapshot-based approach (record URLs seen per machine on each pull,
+    # infer deletions when a URL disappears from a machine's snapshot) could close the gap, but
+    # risks false-positives when a bookmark legitimately lives only on one machine. A personal
+    # fork of the master JSON as the canonical upstream would give an explicit delete surface
+    # (remove the entry from the fork, push, pull propagates the absence).
     seen = {_normalize_url(b["url"]) for b in master["bookmarks"]}
     added = 0
     for bm in new_bookmarks:
