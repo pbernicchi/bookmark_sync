@@ -33,3 +33,7 @@ bookmarks_export.html
 .idea/
 *.swp
 *.swo
+
+# Claude Code
+.claude/
+CLAUDE.md

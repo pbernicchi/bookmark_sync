@@ -28,6 +28,8 @@ Quick-start
   5. For Safari: export from Safari → run safari-in → later run safari-out and re-import.
 """
 
+__version__ = "1.0.0"
+
 import json
 import os
 import platform
@@ -602,6 +604,10 @@ def cmd_help() -> None:
     print(__doc__)
 
 
+def cmd_version() -> None:
+    print(f"bookmark_sync {__version__}")
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  ENTRY POINT
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -613,6 +619,7 @@ COMMANDS: dict[str, tuple] = {
     "safari-out": (cmd_safari_out, "Export master → HTML file         (arg: output path, optional)"),
     "dedupe":     (cmd_dedupe,     "Remove duplicate URLs from master"),
     "status":     (cmd_status,     "Show master file statistics"),
+    "version":    (cmd_version,    "Print version number"),
     "help":       (cmd_help,       "Show this help message"),
 }
 

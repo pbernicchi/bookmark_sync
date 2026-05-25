@@ -1,8 +1,12 @@
 # bookmark_sync
 
-A local Python tool that keeps bookmarks in sync across **Safari, Firefox, Chrome, Brave, and Edge** — including across macOS, Ubuntu, and Windows (e.g. Parallels VM).
+[![version](https://img.shields.io/badge/version-1.0.0-blue)](https://github.com/pbernicchi/bookmark_sync/releases)
+[![python](https://img.shields.io/badge/python-3.9%2B-blue)](https://www.python.org/)
+[![platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#platform-notes)
 
-No cloud service required. One canonical JSON file on a shared location (iCloud Drive, Dropbox, or a Parallels shared folder) is the source of truth.
+A local Python CLI that keeps bookmarks synchronized across **Safari, Firefox, Chrome, Brave, and Edge** on macOS, Ubuntu/Linux, and Windows.
+
+No cloud service or account required. A single `bookmarks_master.json` on any shared location (iCloud Drive, Dropbox, or a Parallels shared folder) is the source of truth.
 
 ---
 
@@ -10,23 +14,60 @@ No cloud service required. One canonical JSON file on a shared location (iCloud 
 
 | Browser | Read | Write |
 |---|---|---|
-| Chrome | ✅ native JSON | ✅ direct |
-| Brave | ✅ native JSON | ✅ direct |
-| Edge | ✅ native JSON | ✅ direct |
-| Firefox | ✅ SQLite | HTML export (manual import) |
-| Safari | HTML export (manual) | HTML export (manual import) |
+| Chrome | native JSON | direct |
+| Brave | native JSON | direct |
+| Edge | native JSON | direct |
+| Firefox | SQLite | HTML import |
+| Safari | HTML export | HTML import |
+
+Chrome, Brave, and Edge are read/written directly. Firefox and Safari use Netscape HTML as the interchange format since their databases are unsafe or inaccessible to write directly.
 
 ---
 
-## Requirements
-
-- Python 3.9+
-- `beautifulsoup4`, `lxml`
+## Install
 
 ```bash
-python3 -m venv ~/bookmark_sync_env
-source ~/bookmark_sync_env/bin/activate
-pip install beautifulsoup4 lxml
+curl -fsSL https://raw.githubusercontent.com/pbernicchi/bookmark_sync/main/install.sh | bash
+```
+
+The installer:
+- Downloads `bookmark_sync.py` to `~/.local/share/bookmark_sync/`
+- Creates a Python virtual environment there
+- Installs `beautifulsoup4` and `lxml`
+- Writes a `bsync` wrapper to `~/.local/bin/`
+
+After install, make sure `~/.local/bin` is in your `PATH`:
+
+```bash
+# add to ~/.zshrc or ~/.bashrc if not already there
+export PATH="$HOME/.local/bin:$PATH"
+```
+
+### Manual install (developers)
+
+```bash
+git clone git@github.com:pbernicchi/bookmark_sync.git
+cd bookmark_sync
+python3 -m venv bookmark_sync_env
+source bookmark_sync_env/bin/activate
+pip install -r requirements.txt
+```
+
+---
+
+## Setup
+
+After installing, open `~/.local/share/bookmark_sync/bookmark_sync.py` and set `MASTER_FILE` near the top to point at a location accessible from all your machines:
+
+```python
+# iCloud Drive (macOS — syncs automatically to all Apple devices)
+MASTER_FILE = HOME / "Library/Mobile Documents/com~apple~CloudDocs/bookmark_sync/bookmarks_master.json"
+
+# Dropbox (works on macOS, Linux, Windows)
+MASTER_FILE = HOME / "Dropbox/bookmark_sync/bookmarks_master.json"
+
+# Parallels shared folder (Windows side)
+MASTER_FILE = Path(r"\\Mac\Home\bookmark_sync\bookmarks_master.json")
 ```
 
 ---
@@ -34,15 +75,18 @@ pip install beautifulsoup4 lxml
 ## Quick start
 
 ```bash
-# 1. Import Safari bookmarks as source of truth
-python3 bookmark_sync.py safari-in ~/Downloads/safari_export.html
+# Pull all browsers on this machine into the master file
+bsync pull
 
-# 2. Push to all Chromium browsers + generate HTML for Safari/Firefox
-#    (close Chrome, Brave, Edge first)
-python3 bookmark_sync.py push
+# Import Safari bookmarks (File → Export Bookmarks in Safari first)
+bsync safari-in ~/Downloads/bookmarks.html
 
-# 3. Check status
-python3 bookmark_sync.py status
+# Push master to all Chromium browsers + generate HTML for Safari/Firefox
+# (close Chrome, Brave, and Edge before running)
+bsync push
+
+# Check what's in the master file
+bsync status
 ```
 
 ---
@@ -57,49 +101,31 @@ python3 bookmark_sync.py status
 | `safari-out [file]` | Export master as HTML for Safari or Firefox import |
 | `dedupe` | Remove duplicate URLs from master |
 | `status` | Show counts by folder and source browser |
+| `version` | Print the installed version |
 | `help` | Print command summary |
-
----
-
-## Configuration
-
-Edit the `MASTER_FILE` variable near the top of `bookmark_sync.py` to point at a location accessible from all your machines:
-
-```python
-# iCloud Drive (macOS default)
-MASTER_FILE = HOME / "Library/Mobile Documents/com~apple~CloudDocs/bookmark_sync/bookmarks_master.json"
-
-# Dropbox (works on macOS, Linux, Windows)
-MASTER_FILE = HOME / "Dropbox/bookmark_sync/bookmarks_master.json"
-
-# Parallels shared folder (Windows side)
-MASTER_FILE = Path(r"\\Mac\Home\bookmark_sync\bookmarks_master.json")
-```
-
----
-
-## Shell alias (optional)
-
-Add to `~/.zshrc` for quick access from anywhere:
-
-```bash
-alias bsync='source ~/bookmark_sync_env/bin/activate && python3 ~/Git/bookmark_sync/bookmark_sync.py'
-```
-
-Then: `bsync pull`, `bsync push`, `bsync status`
 
 ---
 
 ## Backups
 
-Before every write, the script backs up the original file to `~/.bookmark_sync_backups/` with a timestamp. Nothing is ever lost.
+Before every write the script saves a timestamped copy of the original file to `~/.bookmark_sync_backups/`. Nothing is ever overwritten without a backup.
 
 ---
 
 ## Platform notes
 
-- **Safari**: Apple locks the bookmark database. Export via *File → Export Bookmarks*, then run `safari-in`.
-- **Firefox**: Write-back via HTML import only (writing to a live SQLite DB is unsafe).
-- **Linux/Ubuntu**: Chrome, Brave, and Firefox paths are auto-detected under `~/.config` and `~/.mozilla`.
-- **Windows**: Chrome, Brave, Edge, and Firefox paths are auto-detected from `%LOCALAPPDATA%` and `%APPDATA%`.
-- **Parallels VM**: Point `MASTER_FILE` at a Parallels shared folder path accessible from both macOS and Windows.
+- **Safari** — Apple locks the bookmark database with `EPERM`. Workflow: *File → Export Bookmarks* → `bsync safari-in` → `bsync safari-out` → re-import into Safari.
+- **Firefox** — Writing to a live `places.sqlite` risks corruption (active WAL journal). HTML import is the safe path.
+- **Linux/Ubuntu** — Chrome, Brave, and Firefox paths are auto-detected under `~/.config` and `~/.mozilla`. iCloud Drive has no native Linux client; use Dropbox or `rclone`.
+- **Windows** — Chrome, Brave, Edge, and Firefox paths are auto-detected from `%LOCALAPPDATA%` and `%APPDATA%`.
+- **Parallels VM** — Point `MASTER_FILE` at a Parallels shared folder path visible from both macOS and Windows.
+
+---
+
+## Versioning
+
+Releases follow [Semantic Versioning](https://semver.org). See [Releases](https://github.com/pbernicchi/bookmark_sync/releases) for the changelog.
+
+```bash
+bsync version
+```
