@@ -37,3 +37,4 @@ bookmarks_export.html
 # Claude Code
 .claude/
 CLAUDE.md
+.gitignore
